@@ -95,7 +95,7 @@
                 <div><label>FAX</label><input type="text" v-model="form.fax"></div>
                 <div class="full-width"><label>e-mail</label><input type="email" v-model="form.email"></div>
                 <div class="full-width"><label>地址</label><input type="text" v-model="form.address"></div>
-                <div><label>訓練主管</label><select v-model="form.isTrainer"><option value="YES">YES</option><option value="NO">NO</option></select></div>
+                <div><label>訓練主管或主辦</label><select v-model="form.isTrainer"><option value="YES">YES</option><option value="NO">NO</option></select></div>
                 <div><label>寄發DM</label><select v-model="form.sendDM"><option value="YES">YES</option><option value="NO">NO</option></select></div>
             </div>
             <div style="margin-top: 20px; text-align: right;">
@@ -268,4 +268,5 @@ createApp({
 }).mount('#app');
 </script>
 </body>
+
 </html>
