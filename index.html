@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>公司聯絡人回饋管理系統 - 進階管理版</title>
+    <title>公司聯絡人回饋管理系統 - 標籤優化版</title>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
@@ -11,36 +11,34 @@
 
     <style>
         body { font-family: "微軟正黑體", sans-serif; background-color: #f0f2f5; margin: 0; padding: 20px; color: #333; }
-        .container { max-width: 1200px; margin: 0 auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        .container { max-width: 1400px; margin: 0 auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
         h2 { color: #1a73e8; border-bottom: 2px solid #e8f0fe; padding-bottom: 15px; margin: 0 0 20px 0; }
         
         .login-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: flex; justify-content: center; align-items: center; z-index: 1000; }
         .login-box { background: white; padding: 30px; border-radius: 12px; width: 400px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
         
-        .section { margin-bottom: 25px; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px; background: #fff; }
-        .grid-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; }
-        .full-width { grid-column: 1 / -1; }
+        .inline-input { width: 100%; padding: 6px; border: 1px solid #1a73e8; border-radius: 4px; box-sizing: border-box; font-size: 0.85rem; margin-bottom: 2px; }
+        .inline-input:disabled { background-color: #f5f5f5; border: 1px solid #ddd; color: #888; }
         
-        label { display: block; margin-bottom: 6px; font-weight: bold; font-size: 0.9rem; color: #555; }
-        input, select { width: 100%; padding: 10px; border: 1px solid #ced4da; border-radius: 6px; box-sizing: border-box; font-size: 1rem; }
-        
-        .btn { padding: 10px 16px; border: none; border-radius: 6px; cursor: pointer; font-size: 0.95rem; transition: 0.2s; font-weight: 500; }
+        .btn { padding: 8px 12px; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem; transition: 0.2s; font-weight: 500; }
         .btn-primary { background: #1a73e8; color: white; }
         .btn-success { background: #34a853; color: white; }
         .btn-danger { background: #ea4335; color: white; }
         .btn-secondary { background: #70757a; color: white; }
-        .btn:hover { opacity: 0.9; }
 
-        /* 批量操作工具列 */
         .batch-bar { background: #fff9c4; padding: 12px; border-radius: 6px; margin-bottom: 15px; display: flex; align-items: center; gap: 15px; border: 1px solid #fbc02d; }
 
         table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.85rem; }
-        th, td { border: 1px solid #f1f3f4; padding: 12px; text-align: left; }
-        th { background-color: #f8f9fa; position: sticky; top: 0; z-index: 10; }
+        th, td { border: 1px solid #f1f3f4; padding: 10px; text-align: left; vertical-align: middle; }
+        th { background-color: #f8f9fa; position: sticky; top: 0; z-index: 10; color: #555; }
         
-        .tag { padding: 3px 6px; border-radius: 4px; font-size: 0.7rem; color: white; font-weight: bold; }
+        .tag { padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; color: white; font-weight: bold; white-space: nowrap; }
         .tag-yes { background: #34a853; }
         .tag-no { background: #dadce0; color: #5f6368; }
+        tr.editing-row { background-color: #e8f0fe; }
+
+        /* 針對狀態列的寬度優化 */
+        .status-col { min-width: 160px; }
     </style>
 </head>
 <body>
@@ -51,12 +49,12 @@
             <h3 style="margin-top:0;">🏢 聯絡人資訊維護系統</h3>
             <div style="margin-bottom: 15px;">
                 <label>請輸入公司統一編號 (8碼)：</label>
-                <input type="text" v-model="loginTaxId" maxlength="8" @input="autoSearchCompany">
+                <input type="text" v-model="loginTaxId" maxlength="8" @input="autoSearchCompany" class="inline-input" style="font-size: 1rem;">
             </div>
             <div v-if="/^\d{8}$/.test(loginTaxId)">
-                <div style="margin-bottom: 10px;"><label>編修人公司：</label><input type="text" v-model="editorInfo.company"></div>
-                <div style="margin-bottom: 10px;"><label>編修人姓名：</label><input type="text" v-model="editorInfo.name"></div>
-                <div style="margin-bottom: 15px;"><label>編修人分機：</label><input type="text" v-model="editorInfo.ext"></div>
+                <div style="margin-bottom: 10px;"><label>公司名稱：</label><input type="text" v-model="editorInfo.company" class="inline-input"></div>
+                <div style="margin-bottom: 10px;"><label>姓名：</label><input type="text" v-model="editorInfo.name" class="inline-input"></div>
+                <div style="margin-bottom: 15px;"><label>分機：</label><input type="text" v-model="editorInfo.ext" class="inline-input"></div>
                 <button class="btn btn-primary" style="width: 100%;" @click="login">確認進入</button>
             </div>
         </div>
@@ -66,13 +64,18 @@
         <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
             <div>
                 <h2>{{ isAdmin ? '💎 系統管理員後台' : '📝 貴公司聯絡資訊回饋' }}</h2>
-                <div v-if="!isAdmin" style="color: #666;">統編：<strong>{{ currentTaxId }}</strong></div>
+                <div v-if="!isAdmin" style="color: #666;">
+                    目前作業統編：<strong>{{ currentTaxId }}</strong> | 公司：<strong>{{ editorInfo.company }}</strong>
+                </div>
             </div>
-            <div v-if="isAdmin" style="display:flex; gap:8px;">
-                <button class="btn btn-secondary" @click="triggerImport">📥 匯入 Excel</button>
-                <input type="file" ref="fileInput" style="display:none" accept=".xlsx, .xls, .csv" @change="handleImport">
-                <button class="btn btn-success" @click="exportExcel">📊 匯出 Excel</button>
-                <button class="btn btn-danger" @click="clearAllData">🗑️ 清空資料庫</button>
+            <div style="display:flex; gap:8px;">
+                <template v-if="isAdmin">
+                    <button class="btn btn-secondary" @click="triggerImport">📥 匯入 Excel</button>
+                    <input type="file" ref="fileInput" style="display:none" accept=".xlsx, .xls, .csv" @change="handleImport">
+                    <button class="btn btn-success" @click="exportExcel">📊 匯出 Excel</button>
+                    <button class="btn btn-danger" @click="clearAllData">🗑️ 清空資料庫</button>
+                </template>
+                <button v-if="!editingId && !isAdding" class="btn btn-primary" @click="startAddNew">➕ 新增聯絡人</button>
             </div>
         </div>
 
@@ -82,63 +85,122 @@
             <button class="btn btn-secondary" @click="selectedIds = []">取消選取</button>
         </div>
 
-        <div v-if="showEditForm" class="section">
-            <h3 style="margin-top:0;">{{ editingId ? '✏️ 修改資訊' : '➕ 新增聯絡人' }}</h3>
-            <div class="grid-form">
-                <div><label>統一編號</label><input type="text" v-model="form.taxId" :disabled="!isAdmin"></div>
-                <div><label>公司名稱</label><input type="text" v-model="form.compName"></div>
-                <div><label>單位</label><input type="text" v-model="form.dept"></div>
-                <div><label>姓名</label><input type="text" v-model="form.name"></div>
-                <div><label>職稱</label><input type="text" v-model="form.title"></div>
-                <div><label>電話</label><input type="text" v-model="form.phone"></div>
-                <div><label>分機</label><input type="text" v-model="form.ext"></div>
-                <div><label>FAX</label><input type="text" v-model="form.fax"></div>
-                <div class="full-width"><label>e-mail</label><input type="email" v-model="form.email"></div>
-                <div class="full-width"><label>地址</label><input type="text" v-model="form.address"></div>
-                <div><label>訓練主管或主辦</label><select v-model="form.isTrainer"><option value="YES">YES</option><option value="NO">NO</option></select></div>
-                <div><label>每季寄發DM</label><select v-model="form.sendDM"><option value="YES">YES</option><option value="NO">NO</option></select></div>
-            </div>
-            <div style="margin-top: 20px; text-align: right;">
-                <button class="btn btn-secondary" @click="showEditForm = false">取消</button>
-                <button class="btn btn-primary" @click="saveData" style="margin-left: 10px;">儲存</button>
-            </div>
-        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th v-if="isAdmin" style="width: 40px;"><input type="checkbox" @change="toggleSelectAll" :checked="isAllSelected"></th>
+                    <th style="width: 100px;">統編</th>
+                    <th style="min-width: 180px;">公司/單位</th>
+                    <th style="width: 120px;">姓名/職稱</th>
+                    <th style="min-width: 200px;">聯繫方式</th>
+                    <th class="status-col">狀態確認</th>
+                    <th style="width: 120px;">最後異動</th>
+                    <th style="width: 110px;">操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr v-if="isAdding" class="editing-row">
+                    <td v-if="isAdmin"></td>
+                    <td><input type="text" v-model="editForm.taxId" class="inline-input" :disabled="!isAdmin"></td>
+                    <td>
+                        <input type="text" v-model="editForm.compName" class="inline-input" :disabled="!isAdmin">
+                        <input type="text" v-model="editForm.dept" class="inline-input" placeholder="單位">
+                    </td>
+                    <td>
+                        <input type="text" v-model="editForm.name" class="inline-input" placeholder="姓名">
+                        <input type="text" v-model="editForm.title" class="inline-input" placeholder="職稱">
+                    </td>
+                    <td>
+                        <input type="text" v-model="editForm.phone" class="inline-input" placeholder="電話">
+                        <input type="email" v-model="editForm.email" class="inline-input" placeholder="Email">
+                        <input type="text" v-model="editForm.address" class="inline-input" placeholder="地址">
+                    </td>
+                    <td>
+                        <select v-model="editForm.isTrainer" class="inline-input">
+                            <option value="YES">訓練主管或主辦:YES</option>
+                            <option value="NO">訓練主管或主辦:NO</option>
+                        </select>
+                        <select v-model="editForm.sendDM" class="inline-input">
+                            <option value="YES">每季寄發DM:YES</option>
+                            <option value="NO">每季寄發DM:NO</option>
+                        </select>
+                    </td>
+                    <td>-</td>
+                    <td>
+                        <button class="btn btn-success" @click="saveData" style="width:100%; padding:4px; margin-bottom:2px;">儲存</button>
+                        <button class="btn btn-secondary" @click="cancelEdit" style="width:100%; padding:4px;">取消</button>
+                    </td>
+                </tr>
 
-        <div v-if="!showEditForm">
-            <button class="btn btn-primary" @click="openAddForm" style="margin-bottom: 10px;">➕ 新增聯絡人</button>
-            <table>
-                <thead>
-                    <tr>
-                        <th v-if="isAdmin" style="width: 40px;"><input type="checkbox" @change="toggleSelectAll" :checked="isAllSelected"></th>
-                        <th v-if="isAdmin">統編</th>
-                        <th>公司/單位</th>
-                        <th>姓名/職稱</th>
-                        <th>聯繫方式</th>
-                        <th>狀態</th>
-                        <th>最後異動</th>
-                        <th>操作</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr v-for="item in filteredData" :key="item.id">
-                        <td v-if="isAdmin"><input type="checkbox" v-model="selectedIds" :value="item.id"></td>
-                        <td v-if="isAdmin"><strong>{{ item.taxId }}</strong></td>
-                        <td>{{ item.compName }}<br><small style="color:#888">{{ item.dept }}</small></td>
-                        <td>{{ item.name }}<br><small style="color:#888">{{ item.title }}</small></td>
-                        <td>📞 {{ item.phone }} #{{ item.ext }}<br>✉️ {{ item.email }}</td>
-                        <td>
-                            <span :class="['tag', item.isTrainer === 'YES' ? 'tag-yes' : 'tag-no']">訓:{{ item.isTrainer }}</span><br>
-                            <span :class="['tag', item.sendDM === 'YES' ? 'tag-yes' : 'tag-no']" style="display:inline-block; margin-top:5px;">DM:{{ item.sendDM }}</span>
-                        </td>
-                        <td style="font-size: 0.7rem; color: #666;">{{ item.lastEditor }}<br>{{ formatDate(item.updateTime) }}</td>
-                        <td>
-                            <button class="btn btn-primary" @click="editItem(item)" style="padding: 4px 8px; font-size: 0.75rem;">改</button>
-                            <button class="btn btn-danger" @click="deleteItem(item.id)" style="padding: 4px 8px; font-size: 0.75rem; margin-top:3px;">刪</button>
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
+                <tr v-for="item in filteredData" :key="item.id" :class="{'editing-row': editingId === item.id}">
+                    <td v-if="isAdmin"><input type="checkbox" v-model="selectedIds" :value="item.id"></td>
+                    <td>
+                        <input v-if="editingId === item.id" v-model="editForm.taxId" class="inline-input" :disabled="!isAdmin">
+                        <span v-else><strong>{{ item.taxId }}</strong></span>
+                    </td>
+                    <td>
+                        <div v-if="editingId === item.id">
+                            <input v-model="editForm.compName" class="inline-input" :disabled="!isAdmin">
+                            <input v-model="editForm.dept" class="inline-input" placeholder="單位">
+                        </div>
+                        <div v-else>
+                            {{ item.compName }}<br><small style="color:#888">{{ item.dept }}</small>
+                        </div>
+                    </td>
+                    <td>
+                        <div v-if="editingId === item.id">
+                            <input v-model="editForm.name" class="inline-input" placeholder="姓名">
+                            <input v-model="editForm.title" class="inline-input" placeholder="職稱">
+                        </div>
+                        <div v-else>
+                            {{ item.name }}<br><small style="color:#888">{{ item.title }}</small>
+                        </div>
+                    </td>
+                    <td>
+                        <div v-if="editingId === item.id">
+                            <input v-model="editForm.phone" class="inline-input" placeholder="電話">
+                            <input v-model="editForm.email" class="inline-input" placeholder="Email">
+                            <input v-model="editForm.address" class="inline-input" placeholder="地址">
+                        </div>
+                        <div v-else>
+                            📞 {{ item.phone }}<br>✉️ {{ item.email }}<br>
+                            <small style="color:#666">📍 {{ item.address }}</small>
+                        </div>
+                    </td>
+                    <td>
+                        <div v-if="editingId === item.id">
+                            <select v-model="editForm.isTrainer" class="inline-input">
+                                <option value="YES">訓練主管或主辦:YES</option>
+                                <option value="NO">訓練主管或主辦:NO</option>
+                            </select>
+                            <select v-model="editForm.sendDM" class="inline-input">
+                                <option value="YES">每季寄發DM:YES</option>
+                                <option value="NO">每季寄發DM:NO</option>
+                            </select>
+                        </div>
+                        <div v-else>
+                            <span :class="['tag', item.isTrainer === 'YES' ? 'tag-yes' : 'tag-no']">
+                                訓練主管:{{ item.isTrainer }}
+                            </span><br>
+                            <span :class="['tag', item.sendDM === 'YES' ? 'tag-yes' : 'tag-no']" style="display:inline-block; margin-top:5px;">
+                                寄發DM:{{ item.sendDM }}
+                            </span>
+                        </div>
+                    </td>
+                    <td style="font-size: 0.7rem; color: #666;">{{ item.lastEditor }}<br>{{ formatDate(item.updateTime) }}</td>
+                    <td>
+                        <div v-if="editingId === item.id">
+                            <button class="btn btn-success" @click="saveData" style="width:100%; padding:4px; margin-bottom:2px;">儲存</button>
+                            <button class="btn btn-secondary" @click="cancelEdit" style="width:100%; padding:4px;">取消</button>
+                        </div>
+                        <div v-else>
+                            <button class="btn btn-primary" @click="startEdit(item)" style="width:100%; padding:4px; margin-bottom:2px;">改</button>
+                            <button class="btn btn-danger" @click="deleteItem(item.id)" style="width:100%; padding:4px;">刪</button>
+                        </div>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
     </div>
 </div>
 
@@ -162,9 +224,8 @@ createApp({
         return {
             isAdmin: false, isLoggedIn: false, loginTaxId: '', currentTaxId: '',
             editorInfo: { company: '', name: '', ext: '' },
-            allData: [], showEditForm: false, editingId: null,
-            form: this.getEmptyForm(),
-            selectedIds: [], // 存放被勾選的 ID
+            allData: [], editingId: null, isAdding: false, editForm: {},
+            selectedIds: [],
             fieldMap: {
                 '統一編號': 'taxId', '公司名稱': 'compName', '單位': 'dept', '姓名': 'name', '職稱': 'title',
                 '電話': 'phone', '分機': 'ext', 'FAX': 'fax', 'e-mail': 'email', '地址': 'address',
@@ -186,55 +247,47 @@ createApp({
         this.isAdmin = urlParams.get('role') === 'admin';
         db.ref('company_contacts').on('value', s => {
             const val = s.val();
-            this.allData = val ? Object.keys(val).map(k => ({ id: k, ...val[k] })) : [];
+            this.allData = val ? Object.keys(val).map(k => ({ id: k, ...val[k] })).sort((a,b) => b.updateTime - a.updateTime) : [];
         });
     },
     methods: {
-        getEmptyForm() { return { taxId: '', compName: '', dept: '', name: '', title: '', phone: '', ext: '', fax: '', email: '', address: '', isTrainer: 'NO', sendDM: 'NO' }; },
         autoSearchCompany() {
             if (this.loginTaxId.length === 8) {
                 const found = this.allData.find(d => String(d.taxId).trim() === this.loginTaxId.trim());
                 if (found) this.editorInfo.company = found.compName;
             }
         },
-        login() { this.currentTaxId = this.loginTaxId.trim(); this.isLoggedIn = true; },
-        openAddForm() {
-            this.editingId = null; this.form = this.getEmptyForm(); this.form.taxId = this.currentTaxId;
-            const ref = this.allData.find(d => String(d.taxId).trim() === String(this.currentTaxId).trim());
-            if (ref) { this.form.compName = ref.compName; this.form.address = ref.address; }
-            this.showEditForm = true;
+        login() { 
+            if (!this.editorInfo.company.trim()) return alert("請輸入公司名稱");
+            this.currentTaxId = this.loginTaxId.trim(); 
+            this.isLoggedIn = true; 
         },
-        editItem(item) { this.editingId = item.id; this.form = { ...item }; this.showEditForm = true; },
+        startAddNew() {
+            this.isAdding = true; this.editingId = null;
+            this.editForm = { taxId: this.currentTaxId, compName: this.editorInfo.company, dept: '', name: '', title: '', phone: '', ext: '', fax: '', email: '', address: '', isTrainer: 'NO', sendDM: 'NO' };
+        },
+        startEdit(item) { this.editingId = item.id; this.isAdding = false; this.editForm = JSON.parse(JSON.stringify(item)); },
+        cancelEdit() { this.editingId = null; this.isAdding = false; this.editForm = {}; },
         saveData() {
-            const payload = { ...this.form, taxId: String(this.form.taxId).trim(), updateTime: Date.now(), 
-                lastEditor: this.isAdmin ? '管理員' : `${this.editorInfo.name}` 
-            };
+            if (!this.editForm.taxId || !this.editForm.compName || !this.editForm.name) return alert("必填欄位缺失");
+            const payload = { ...this.editForm, updateTime: Date.now(), lastEditor: this.isAdmin ? '管理員' : this.editorInfo.name };
+            delete payload.id;
             if (this.editingId) db.ref(`company_contacts/${this.editingId}`).update(payload);
             else db.ref('company_contacts').push(payload);
-            this.showEditForm = false;
+            this.cancelEdit();
         },
         deleteItem(id) { if(confirm('確定刪除？')) db.ref(`company_contacts/${id}`).remove(); },
-        // --- 批量操作 ---
         toggleSelectAll() {
             if (this.isAllSelected) this.selectedIds = [];
             else this.selectedIds = this.filteredData.map(d => d.id);
         },
         deleteBatch() {
-            if (confirm(`確定要批量刪除這 ${this.selectedIds.length} 筆資料嗎？此動作不可還原！`)) {
+            if (confirm(`確定刪除這 ${this.selectedIds.length} 筆資料？`)) {
                 this.selectedIds.forEach(id => db.ref(`company_contacts/${id}`).remove());
                 this.selectedIds = [];
-                alert('刪除成功');
             }
         },
-        clearAllData() {
-            if (confirm('【警告】您即將清空資料庫中「所有」公司的聯絡人資料！\n確定要繼續嗎？')) {
-                if (confirm('請再次確認，此操作將刪除所有內容。')) {
-                    db.ref('company_contacts').remove();
-                    alert('資料庫已清空');
-                }
-            }
-        },
-        formatDate(ms) { return ms ? new Date(ms).toLocaleString() : '-'; },
+        clearAllData() { if (confirm('警告！即將清空所有資料庫內容，確定？')) db.ref('company_contacts').remove(); },
         triggerImport() { this.$refs.fileInput.click(); },
         handleImport(e) {
             const file = e.target.files[0];
@@ -244,8 +297,14 @@ createApp({
                 const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { defval: "" });
                 json.forEach(row => {
                     const newDoc = {};
-                    Object.keys(this.fieldMap).forEach(zh => { newDoc[this.fieldMap[zh]] = String(row[zh] || '').trim(); });
-                    newDoc.updateTime = Date.now(); newDoc.lastEditor = "Excel批量匯入";
+                    Object.keys(this.fieldMap).forEach(zh => { 
+                        let val = String(row[zh] || '').trim();
+                        if (zh.includes('YES/NO')) {
+                            val = val.toUpperCase().includes('Y') ? 'YES' : 'NO';
+                        }
+                        newDoc[this.fieldMap[zh]] = val; 
+                    });
+                    newDoc.updateTime = Date.now(); newDoc.lastEditor = "Excel匯入";
                     if (newDoc.taxId) db.ref('company_contacts').push(newDoc);
                 });
                 alert('匯入完成'); e.target.value = '';
@@ -262,13 +321,11 @@ createApp({
             const ws = XLSX.utils.json_to_sheet(rows);
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, "Data");
-            XLSX.writeFile(wb, "公司聯絡人總表.xlsx");
-        }
+            XLSX.writeFile(wb, "聯絡人資料庫.xlsx");
+        },
+        formatDate(ms) { return ms ? new Date(ms).toLocaleString() : '-'; }
     }
 }).mount('#app');
 </script>
 </body>
-
 </html>
-
-
