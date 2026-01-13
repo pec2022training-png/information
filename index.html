@@ -46,15 +46,15 @@
 <div id="app">
     <div v-if="!isLoggedIn && !isAdmin" class="login-overlay">
         <div class="login-box">
-            <h3 style="margin-top:0;">🏢 聯絡人資訊維護系統</h3>
+            <h3 style="margin-top:0; text-align: center;">🏢 聯絡人資訊維護系統</h3>
             <div style="margin-bottom: 15px;">
                 <label>請輸入公司統一編號 (8碼)：</label>
                 <input type="text" v-model="loginTaxId" maxlength="8" @input="autoSearchCompany" class="inline-input" style="font-size: 1rem;">
             </div>
             <div v-if="/^\d{8}$/.test(loginTaxId)">
                 <div style="margin-bottom: 10px;"><label>公司名稱：</label><input type="text" v-model="editorInfo.company" class="inline-input"></div>
-                <div style="margin-bottom: 10px;"><label>姓名：</label><input type="text" v-model="editorInfo.name" class="inline-input"></div>
-                <div style="margin-bottom: 15px;"><label>分機：</label><input type="text" v-model="editorInfo.ext" class="inline-input"></div>
+                <div style="margin-bottom: 10px;"><label>編修人姓名：</label><input type="text" v-model="editorInfo.name" placeholder="請輸入您的姓名" class="inline-input"></div>
+                <div style="margin-bottom: 15px;"><label>編修人分機：</label><input type="text" v-model="editorInfo.ext" placeholder="請輸入分機，方便聯繫確認" class="inline-input"></div>
                 <button class="btn btn-primary" style="width: 100%;" @click="login">確認進入</button>
             </div>
         </div>
@@ -64,11 +64,12 @@
         <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
             <div>
                 <h2>{{ isAdmin ? '💎 系統管理員後台' : '📝 貴公司聯絡資訊回饋' }}</h2>
-                <p v-if="!isAdmin" style="color: #666; margin:0;">
+                <p v-if="!isLoggedIn && !isAdmin" style="color: #ea4335;">請先於中間視窗完成身分資訊填寫。</p>
+                <p v-if="isLoggedIn && !isAdmin" style="color: #666; margin:0;">
                     目前作業統編：<strong>{{ currentTaxId }}</strong> | 公司：<strong>{{ editorInfo.company }}</strong><br>
-                    <small>💡 點擊「↑」或「↓」可調整排序，匯出時將依此順序產生。</small>
+                    編修人員：<strong>{{ editorInfo.name }} (分機: {{ editorInfo.ext }})</strong>
                 </p>
-                <p v-else style="color: #666; margin:0;">
+                <p v-else-if="isAdmin" style="color: #666; margin:0;">
                     <small>💡 管理員模式：可進行匯入、匯出與批次刪除勾選項目。</small>
                 </p>
             </div>
@@ -80,7 +81,7 @@
                     <button class="btn btn-success" @click="exportExcel">📊 匯出 Excel</button>
                     <button class="btn btn-danger" @click="clearAllData" style="opacity: 0.7;">🗑️ 清空全庫</button>
                 </template>
-                <button v-if="!editingId && !isAdding" class="btn btn-primary" @click="startAddNew">➕ 新增聯絡人</button>
+                <button v-if="isLoggedIn && !editingId && !isAdding" class="btn btn-primary" @click="startAddNew">➕ 新增聯絡人</button>
             </div>
         </div>
 
@@ -95,7 +96,7 @@
                     <th style="width: 120px;">姓名/職稱</th>
                     <th style="min-width: 200px;">聯繫方式</th>
                     <th class="status-col">狀態確認</th>
-                    <th style="width: 100px;">最後異動</th>
+                    <th style="width: 120px;">最後異動</th>
                     <th style="width: 140px;">操作/排序</th>
                 </tr>
             </thead>
@@ -257,6 +258,7 @@ createApp({
         },
         login() { 
             if (!this.editorInfo.company.trim()) return alert("請輸入公司名稱");
+            if (!this.editorInfo.name.trim()) return alert("請輸入編修人姓名");
             this.currentTaxId = this.loginTaxId.trim(); 
             this.isLoggedIn = true; 
         },
@@ -273,11 +275,10 @@ createApp({
                 try {
                     const promises = this.selectedIds.map(id => db.ref(`company_contacts/${id}`).remove());
                     await Promise.all(promises);
-                    this.selectedIds = []; // 清空選取項
+                    this.selectedIds = [];
                     alert('批次刪除完成');
                 } catch (err) {
                     alert('刪除過程中發生錯誤');
-                    console.error(err);
                 }
             }
         },
@@ -301,7 +302,15 @@ createApp({
         cancelEdit() { this.editingId = null; this.isAdding = false; this.editForm = {}; },
         saveData() {
             if (!this.editForm.taxId || !this.editForm.compName || !this.editForm.name) return alert("必填欄位缺失");
-            const payload = { ...this.editForm, updateTime: Date.now(), lastEditor: this.isAdmin ? '管理員' : this.editorInfo.name };
+            
+            // 組合編修人姓名與分機，方便後續聯繫
+            const editorTag = this.isAdmin ? '管理員' : (this.editorInfo.name + (this.editorInfo.ext ? `(分機:${this.editorInfo.ext})` : ''));
+            
+            const payload = { 
+                ...this.editForm, 
+                updateTime: Date.now(), 
+                lastEditor: editorTag
+            };
             const id = payload.id;
             delete payload.id;
             if (id) db.ref(`company_contacts/${id}`).update(payload);
@@ -343,7 +352,7 @@ createApp({
                 '統一編號': item.taxId, '公司名稱': item.compName, '單位': item.dept, '姓名': item.name, '職稱': item.title,
                 '電話': item.phone, '分機': item.ext, 'FAX': item.fax, 'e-mail': item.email, '地址': item.address,
                 '訓練主管或主辦(YES/NO)': item.isTrainer, '每季寄發DM(YES/NO)': item.sendDM,
-                '最後異動': item.lastEditor, '異動時間': this.formatDate(item.updateTime)
+                '最後異動人': item.lastEditor, '異動時間': this.formatDate(item.updateTime)
             }));
             const ws = XLSX.utils.json_to_sheet(rows);
             const wb = XLSX.utils.book_new();
