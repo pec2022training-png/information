@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>公司聯絡人回饋管理系統 - 完整標籤版</title>
+    <title>公司聯絡人回饋管理系統 - 自排順序版</title>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
@@ -11,7 +11,7 @@
 
     <style>
         body { font-family: "微軟正黑體", sans-serif; background-color: #f0f2f5; margin: 0; padding: 20px; color: #333; }
-        .container { max-width: 1400px; margin: 0 auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        .container { max-width: 1450px; margin: 0 auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
         h2 { color: #1a73e8; border-bottom: 2px solid #e8f0fe; padding-bottom: 15px; margin: 0 0 20px 0; }
         
         .login-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: flex; justify-content: center; align-items: center; z-index: 1000; }
@@ -20,13 +20,13 @@
         .inline-input { width: 100%; padding: 6px; border: 1px solid #1a73e8; border-radius: 4px; box-sizing: border-box; font-size: 0.85rem; margin-bottom: 2px; }
         .inline-input:disabled { background-color: #f5f5f5; border: 1px solid #ddd; color: #888; }
         
-        .btn { padding: 8px 12px; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem; transition: 0.2s; font-weight: 500; }
+        .btn { padding: 6px 10px; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem; transition: 0.2s; font-weight: 500; }
         .btn-primary { background: #1a73e8; color: white; }
         .btn-success { background: #34a853; color: white; }
         .btn-danger { background: #ea4335; color: white; }
         .btn-secondary { background: #70757a; color: white; }
-
-        .batch-bar { background: #fff9c4; padding: 12px; border-radius: 6px; margin-bottom: 15px; display: flex; align-items: center; gap: 15px; border: 1px solid #fbc02d; }
+        .btn-sort { background: #f8f9fa; color: #333; border: 1px solid #ddd; margin-right: 2px; }
+        .btn-sort:hover { background: #e8f0fe; }
 
         table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.85rem; }
         th, td { border: 1px solid #f1f3f4; padding: 10px; text-align: left; vertical-align: middle; }
@@ -37,8 +37,8 @@
         .tag-no { background: #dadce0; color: #5f6368; }
         tr.editing-row { background-color: #e8f0fe; }
 
-        /* 針對狀態列的寬度優化：因為字數增加，調寬 min-width */
         .status-col { min-width: 180px; }
+        .move-btns { display: flex; flex-direction: column; gap: 2px; }
     </style>
 </head>
 <body>
@@ -64,9 +64,10 @@
         <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
             <div>
                 <h2>{{ isAdmin ? '💎 系統管理員後台' : '📝 貴公司聯絡資訊回饋' }}</h2>
-                <div v-if="!isAdmin" style="color: #666;">
-                    目前作業統編：<strong>{{ currentTaxId }}</strong> | 公司：<strong>{{ editorInfo.company }}</strong>
-                </div>
+                <p v-if="!isAdmin" style="color: #666; margin:0;">
+                    目前作業統編：<strong>{{ currentTaxId }}</strong> | 公司：<strong>{{ editorInfo.company }}</strong><br>
+                    <small>💡 點擊「↑」或「↓」可調整排序，匯出時將依此順序產生。</small>
+                </p>
             </div>
             <div style="display:flex; gap:8px;">
                 <template v-if="isAdmin">
@@ -79,23 +80,17 @@
             </div>
         </div>
 
-        <div v-if="isAdmin && selectedIds.length > 0" class="batch-bar">
-            <strong>已選取 {{ selectedIds.length }} 筆資料</strong>
-            <button class="btn btn-danger" @click="deleteBatch">⚠️ 批量刪除選取項</button>
-            <button class="btn btn-secondary" @click="selectedIds = []">取消選取</button>
-        </div>
-
         <table>
             <thead>
                 <tr>
-                    <th v-if="isAdmin" style="width: 40px;"><input type="checkbox" @change="toggleSelectAll" :checked="isAllSelected"></th>
+                    <th v-if="isAdmin" style="width: 40px;">選</th>
                     <th style="width: 100px;">統編</th>
                     <th style="min-width: 180px;">公司/單位</th>
                     <th style="width: 120px;">姓名/職稱</th>
                     <th style="min-width: 200px;">聯繫方式</th>
                     <th class="status-col">狀態確認</th>
-                    <th style="width: 120px;">最後異動</th>
-                    <th style="width: 110px;">操作</th>
+                    <th style="width: 100px;">最後異動</th>
+                    <th style="width: 140px;">操作/排序</th>
                 </tr>
             </thead>
             <tbody>
@@ -127,12 +122,12 @@
                     </td>
                     <td>-</td>
                     <td>
-                        <button class="btn btn-success" @click="saveData" style="width:100%; padding:4px; margin-bottom:2px;">儲存</button>
-                        <button class="btn btn-secondary" @click="cancelEdit" style="width:100%; padding:4px;">取消</button>
+                        <button class="btn btn-success" @click="saveData" style="width:100%; margin-bottom:2px;">儲存</button>
+                        <button class="btn btn-secondary" @click="cancelEdit" style="width:100%;">取消</button>
                     </td>
                 </tr>
 
-                <tr v-for="item in filteredData" :key="item.id" :class="{'editing-row': editingId === item.id}">
+                <tr v-for="(item, index) in filteredData" :key="item.id" :class="{'editing-row': editingId === item.id}">
                     <td v-if="isAdmin"><input type="checkbox" v-model="selectedIds" :value="item.id"></td>
                     <td>
                         <input v-if="editingId === item.id" v-model="editForm.taxId" class="inline-input" :disabled="!isAdmin">
@@ -143,18 +138,14 @@
                             <input v-model="editForm.compName" class="inline-input" :disabled="!isAdmin">
                             <input v-model="editForm.dept" class="inline-input" placeholder="單位">
                         </div>
-                        <div v-else>
-                            {{ item.compName }}<br><small style="color:#888">{{ item.dept }}</small>
-                        </div>
+                        <div v-else>{{ item.compName }}<br><small style="color:#888">{{ item.dept }}</small></div>
                     </td>
                     <td>
                         <div v-if="editingId === item.id">
                             <input v-model="editForm.name" class="inline-input" placeholder="姓名">
                             <input v-model="editForm.title" class="inline-input" placeholder="職稱">
                         </div>
-                        <div v-else>
-                            {{ item.name }}<br><small style="color:#888">{{ item.title }}</small>
-                        </div>
+                        <div v-else>{{ item.name }}<br><small style="color:#888">{{ item.title }}</small></div>
                     </td>
                     <td>
                         <div v-if="editingId === item.id">
@@ -162,10 +153,7 @@
                             <input v-model="editForm.email" class="inline-input" placeholder="Email">
                             <input v-model="editForm.address" class="inline-input" placeholder="地址">
                         </div>
-                        <div v-else>
-                            📞 {{ item.phone }}<br>✉️ {{ item.email }}<br>
-                            <small style="color:#666">📍 {{ item.address }}</small>
-                        </div>
+                        <div v-else>📞 {{ item.phone }}<br>✉️ {{ item.email }}<br><small>📍 {{ item.address }}</small></div>
                     </td>
                     <td>
                         <div v-if="editingId === item.id">
@@ -179,23 +167,25 @@
                             </select>
                         </div>
                         <div v-else>
-                            <span :class="['tag', item.isTrainer === 'YES' ? 'tag-yes' : 'tag-no']">
-                                訓練主管或主辦:{{ item.isTrainer }}
-                            </span><br>
-                            <span :class="['tag', item.sendDM === 'YES' ? 'tag-yes' : 'tag-no']" style="margin-top:5px;">
-                                每季寄發DM:{{ item.sendDM }}
-                            </span>
+                            <span :class="['tag', item.isTrainer === 'YES' ? 'tag-yes' : 'tag-no']">訓練主管或主辦:{{ item.isTrainer }}</span><br>
+                            <span :class="['tag', item.sendDM === 'YES' ? 'tag-yes' : 'tag-no']" style="margin-top:5px;">每季寄發DM:{{ item.sendDM }}</span>
                         </div>
                     </td>
                     <td style="font-size: 0.7rem; color: #666;">{{ item.lastEditor }}<br>{{ formatDate(item.updateTime) }}</td>
                     <td>
                         <div v-if="editingId === item.id">
-                            <button class="btn btn-success" @click="saveData" style="width:100%; padding:4px; margin-bottom:2px;">儲存</button>
-                            <button class="btn btn-secondary" @click="cancelEdit" style="width:100%; padding:4px;">取消</button>
+                            <button class="btn btn-success" @click="saveData" style="width:100%; margin-bottom:2px;">儲存</button>
+                            <button class="btn btn-secondary" @click="cancelEdit" style="width:100%;">取消</button>
                         </div>
-                        <div v-else>
-                            <button class="btn btn-primary" @click="startEdit(item)" style="width:100%; padding:4px; margin-bottom:2px;">改</button>
-                            <button class="btn btn-danger" @click="deleteItem(item.id)" style="width:100%; padding:4px;">刪</button>
+                        <div v-else style="display: flex; gap: 5px; align-items: center;">
+                            <div class="move-btns">
+                                <button class="btn btn-sort" @click="moveItem(index, -1)" title="上移">↑</button>
+                                <button class="btn btn-sort" @click="moveItem(index, 1)" title="下移">↓</button>
+                            </div>
+                            <div style="flex:1">
+                                <button class="btn btn-primary" @click="startEdit(item)" style="width:100%; padding:2px; margin-bottom:2px;">改</button>
+                                <button class="btn btn-danger" @click="deleteItem(item.id)" style="width:100%; padding:2px;">刪</button>
+                            </div>
                         </div>
                     </td>
                 </tr>
@@ -235,11 +225,9 @@ createApp({
     },
     computed: {
         filteredData() {
-            if (this.isAdmin) return this.allData;
-            return this.allData.filter(d => String(d.taxId).trim() === String(this.currentTaxId).trim());
-        },
-        isAllSelected() {
-            return this.filteredData.length > 0 && this.selectedIds.length === this.filteredData.length;
+            let data = this.isAdmin ? this.allData : this.allData.filter(d => String(d.taxId).trim() === String(this.currentTaxId).trim());
+            // 排序邏輯：優先使用 order 欄位，若無則依 updateTime
+            return data.sort((a, b) => (a.order || 0) - (b.order || 0) || (a.updateTime - b.updateTime));
         }
     },
     mounted() {
@@ -247,7 +235,7 @@ createApp({
         this.isAdmin = urlParams.get('role') === 'admin';
         db.ref('company_contacts').on('value', s => {
             const val = s.val();
-            this.allData = val ? Object.keys(val).map(k => ({ id: k, ...val[k] })).sort((a,b) => b.updateTime - a.updateTime) : [];
+            this.allData = val ? Object.keys(val).map(k => ({ id: k, ...val[k] })) : [];
         });
     },
     methods: {
@@ -262,31 +250,45 @@ createApp({
             this.currentTaxId = this.loginTaxId.trim(); 
             this.isLoggedIn = true; 
         },
+        // 核心功能：調整順序
+        async moveItem(index, direction) {
+            const targetIndex = index + direction;
+            if (targetIndex < 0 || targetIndex >= this.filteredData.length) return;
+
+            const currentItem = this.filteredData[index];
+            const targetItem = this.filteredData[targetIndex];
+
+            // 確保雙方都有 order 值，如果沒有，就用目前索引當作初始值
+            let currentOrder = currentItem.order !== undefined ? currentItem.order : index;
+            let targetOrder = targetItem.order !== undefined ? targetItem.order : targetIndex;
+
+            // 如果兩者 order 一樣（可能舊資料未設定），強制拉開
+            if (currentOrder === targetOrder) {
+                targetOrder = currentOrder + direction;
+            }
+
+            // 交換 order 值
+            await db.ref(`company_contacts/${currentItem.id}`).update({ order: targetOrder });
+            await db.ref(`company_contacts/${targetItem.id}`).update({ order: currentOrder });
+        },
         startAddNew() {
             this.isAdding = true; this.editingId = null;
-            this.editForm = { taxId: this.currentTaxId, compName: this.editorInfo.company, dept: '', name: '', title: '', phone: '', ext: '', fax: '', email: '', address: '', isTrainer: 'NO', sendDM: 'NO' };
+            // 新增時，給予一個比目前最後一筆更大的序號，讓它排在最後
+            const maxOrder = this.filteredData.length > 0 ? Math.max(...this.filteredData.map(d => d.order || 0)) : 0;
+            this.editForm = { taxId: this.currentTaxId, compName: this.editorInfo.company, dept: '', name: '', title: '', phone: '', ext: '', fax: '', email: '', address: '', isTrainer: 'NO', sendDM: 'NO', order: maxOrder + 1 };
         },
         startEdit(item) { this.editingId = item.id; this.isAdding = false; this.editForm = JSON.parse(JSON.stringify(item)); },
         cancelEdit() { this.editingId = null; this.isAdding = false; this.editForm = {}; },
         saveData() {
             if (!this.editForm.taxId || !this.editForm.compName || !this.editForm.name) return alert("必填欄位缺失");
             const payload = { ...this.editForm, updateTime: Date.now(), lastEditor: this.isAdmin ? '管理員' : this.editorInfo.name };
+            const id = payload.id;
             delete payload.id;
-            if (this.editingId) db.ref(`company_contacts/${this.editingId}`).update(payload);
+            if (id) db.ref(`company_contacts/${id}`).update(payload);
             else db.ref('company_contacts').push(payload);
             this.cancelEdit();
         },
         deleteItem(id) { if(confirm('確定刪除？')) db.ref(`company_contacts/${id}`).remove(); },
-        toggleSelectAll() {
-            if (this.isAllSelected) this.selectedIds = [];
-            else this.selectedIds = this.filteredData.map(d => d.id);
-        },
-        deleteBatch() {
-            if (confirm(`確定刪除這 ${this.selectedIds.length} 筆資料？`)) {
-                this.selectedIds.forEach(id => db.ref(`company_contacts/${id}`).remove());
-                this.selectedIds = [];
-            }
-        },
         clearAllData() { if (confirm('警告！即將清空所有資料庫內容，確定？')) db.ref('company_contacts').remove(); },
         triggerImport() { this.$refs.fileInput.click(); },
         handleImport(e) {
@@ -295,16 +297,16 @@ createApp({
             reader.onload = (ev) => {
                 const workbook = XLSX.read(new Uint8Array(ev.target.result), { type: 'array' });
                 const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { defval: "" });
-                json.forEach(row => {
+                json.forEach((row, index) => {
                     const newDoc = {};
                     Object.keys(this.fieldMap).forEach(zh => { 
                         let val = String(row[zh] || '').trim();
-                        if (zh.includes('YES/NO')) {
-                            val = val.toUpperCase().includes('Y') ? 'YES' : 'NO';
-                        }
+                        if (zh.includes('YES/NO')) val = val.toUpperCase().includes('Y') ? 'YES' : 'NO';
                         newDoc[this.fieldMap[zh]] = val; 
                     });
-                    newDoc.updateTime = Date.now(); newDoc.lastEditor = "Excel匯入";
+                    newDoc.updateTime = Date.now();
+                    newDoc.lastEditor = "Excel匯入";
+                    newDoc.order = index; // 【關鍵】匯入時依序給予序號，維持 Excel 順序
                     if (newDoc.taxId) db.ref('company_contacts').push(newDoc);
                 });
                 alert('匯入完成'); e.target.value = '';
@@ -312,16 +314,17 @@ createApp({
             reader.readAsArrayBuffer(file);
         },
         exportExcel() {
-            const rows = this.allData.map(item => ({
+            // 匯出時會依照 computed (filteredData) 已經排好的順序
+            const rows = this.filteredData.map(item => ({
                 '統一編號': item.taxId, '公司名稱': item.compName, '單位': item.dept, '姓名': item.name, '職稱': item.title,
                 '電話': item.phone, '分機': item.ext, 'FAX': item.fax, 'e-mail': item.email, '地址': item.address,
                 '訓練主管或主辦(YES/NO)': item.isTrainer, '每季寄發DM(YES/NO)': item.sendDM,
-                '最後異動': item.lastEditor, '時間': this.formatDate(item.updateTime)
+                '最後異動': item.lastEditor, '異動時間': this.formatDate(item.updateTime)
             }));
             const ws = XLSX.utils.json_to_sheet(rows);
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, "Data");
-            XLSX.writeFile(wb, "聯絡人資料庫.xlsx");
+            XLSX.writeFile(wb, `聯絡人資料庫_${new Date().toLocaleDateString()}.xlsx`);
         },
         formatDate(ms) { return ms ? new Date(ms).toLocaleString() : '-'; }
     }
