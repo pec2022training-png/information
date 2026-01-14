@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>公司聯絡人回饋管理系統 - 原始順序版</title>
+    <title>公司聯絡人回饋管理系統 - 完整欄位修正版</title>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
@@ -69,7 +69,7 @@
                     編修人員：<strong>{{ editorInfo.name }} (分機: {{ editorInfo.ext }})</strong>
                 </p>
                 <p v-else-if="isAdmin" style="color: #666; margin:0;">
-                    <small>💡 管理員模式：維持原始 Excel 公司排序，公司內部可自訂順序。</small>
+                    <small>💡 管理員模式：已修正 FAX 欄位顯示，維持原始 Excel 排序邏輯。</small>
                 </p>
             </div>
             <div style="display:flex; gap:8px; flex-wrap: wrap; justify-content: flex-end;">
@@ -93,7 +93,7 @@
                     <th style="width: 100px;">統編</th>
                     <th style="min-width: 180px;">公司/單位</th>
                     <th style="width: 120px;">姓名/職稱</th>
-                    <th style="min-width: 200px;">聯繫方式</th>
+                    <th style="min-width: 200px;">聯繫方式 (含FAX)</th>
                     <th class="status-col">狀態確認</th>
                     <th style="width: 120px;">最後異動</th>
                     <th style="width: 140px;">操作/排序</th>
@@ -113,6 +113,7 @@
                     </td>
                     <td>
                         <input type="text" v-model="editForm.phone" class="inline-input" placeholder="電話">
+                        <input type="text" v-model="editForm.fax" class="inline-input" placeholder="FAX (傳真)">
                         <input type="email" v-model="editForm.email" class="inline-input" placeholder="Email">
                         <input type="text" v-model="editForm.address" class="inline-input" placeholder="地址">
                     </td>
@@ -158,10 +159,16 @@
                     <td>
                         <div v-if="editingId === item.id">
                             <input v-model="editForm.phone" class="inline-input" placeholder="電話">
+                            <input v-model="editForm.fax" class="inline-input" placeholder="FAX (傳真)">
                             <input v-model="editForm.email" class="inline-input" placeholder="Email">
                             <input v-model="editForm.address" class="inline-input" placeholder="地址">
                         </div>
-                        <div v-else>📞 {{ item.phone }}<br>✉️ {{ item.email }}<br><small>📍 {{ item.address }}</small></div>
+                        <div v-else>
+                            📞 {{ item.phone }}<br>
+                            📠 FAX: {{ item.fax || '-' }}<br>
+                            ✉️ {{ item.email }}<br>
+                            <small>📍 {{ item.address }}</small>
+                        </div>
                     </td>
                     <td>
                         <div v-if="editingId === item.id">
@@ -235,8 +242,7 @@ createApp({
         filteredData() {
             let baseData = this.isAdmin ? this.allData : this.allData.filter(d => String(d.taxId).trim() === String(this.currentTaxId).trim());
             
-            // 【重要修正】維持原始 Excel 順序且不按統編大小排序
-            // 1. 先計算每家公司(統編)在全資料庫中的最小 Order 值（代表該公司在原始清單的位階）
+            // 維持原始 Excel 順序邏輯：計算每家公司在全資料庫中的最小 Order 值
             const companyRanks = {};
             this.allData.forEach(item => {
                 const tid = String(item.taxId);
@@ -246,21 +252,13 @@ createApp({
                 }
             });
 
-            // 2. 進行排序
             return baseData.sort((a, b) => {
                 const tidA = String(a.taxId);
                 const tidB = String(b.taxId);
-                
-                // 如果統編不同，比較兩家公司的「位階」(最小 Order)
-                if (tidA !== tidB) {
-                    return companyRanks[tidA] - companyRanks[tidB];
-                }
-                
-                // 如果統編相同，比較公司內部的自訂順序
+                if (tidA !== tidB) return companyRanks[tidA] - companyRanks[tidB];
                 const orderA = a.order !== undefined ? a.order : 999999;
                 const orderB = b.order !== undefined ? b.order : 999999;
                 if (orderA !== orderB) return orderA - orderB;
-                
                 return (a.updateTime || 0) - (b.updateTime || 0);
             });
         },
@@ -306,33 +304,22 @@ createApp({
         async moveItem(index, direction) {
             const targetIndex = index + direction;
             if (targetIndex < 0 || targetIndex >= this.filteredData.length) return;
-
             const currentItem = this.filteredData[index];
             const targetItem = this.filteredData[targetIndex];
-
-            // 只允許在同一統編內移動
             if (currentItem.taxId !== targetItem.taxId) return;
-
             let currentOrder = currentItem.order !== undefined ? currentItem.order : index;
             let targetOrder = targetItem.order !== undefined ? targetItem.order : targetIndex;
-
-            if (currentOrder === targetOrder) {
-                targetOrder = currentOrder + direction;
-            }
-
+            if (currentOrder === targetOrder) targetOrder = currentOrder + direction;
             await db.ref(`company_contacts/${currentItem.id}`).update({ order: targetOrder });
             await db.ref(`company_contacts/${targetItem.id}`).update({ order: currentOrder });
         },
         startAddNew() {
             this.isAdding = true; 
             this.editingId = null;
-            // 如果是管理員且沒選統編，預設空值；如果是編修人，自動帶入該公司統編
             const tid = this.isAdmin ? '' : this.currentTaxId;
             const cname = this.isAdmin ? '' : this.editorInfo.company;
-
             const companyData = this.allData.filter(d => String(d.taxId) === String(tid));
             const maxOrder = companyData.length > 0 ? Math.max(...companyData.map(d => d.order || 0)) : 0;
-            
             this.editForm = { 
                 taxId: tid, compName: cname, dept: '', name: '', title: '', phone: '', ext: '', fax: '', email: '', address: '', 
                 isTrainer: 'NO', sendDM: 'NO', order: maxOrder + 1 
@@ -347,12 +334,7 @@ createApp({
         saveData() {
             if (!this.editForm.taxId || !this.editForm.compName || !this.editForm.name) return alert("必填欄位缺失 (統編、公司、姓名)");
             const editorTag = this.isAdmin ? '管理員' : (this.editorInfo.name + (this.editorInfo.ext ? `(分機:${this.editorInfo.ext})` : ''));
-            
-            const payload = { 
-                ...this.editForm, 
-                updateTime: Date.now(), 
-                lastEditor: editorTag
-            };
+            const payload = { ...this.editForm, updateTime: Date.now(), lastEditor: editorTag };
             const id = payload.id;
             delete payload.id;
             if (id) db.ref(`company_contacts/${id}`).update(payload);
@@ -370,7 +352,6 @@ createApp({
             reader.onload = (ev) => {
                 const workbook = XLSX.read(new Uint8Array(ev.target.result), { type: 'array' });
                 const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { defval: "" });
-                
                 json.forEach((row, index) => {
                     const newDoc = {};
                     Object.keys(this.fieldMap).forEach(zh => { 
@@ -380,11 +361,10 @@ createApp({
                     });
                     newDoc.updateTime = Date.now();
                     newDoc.lastEditor = "Excel匯入";
-                    newDoc.order = index; // 維持 Excel 匯入的原始絕對順序
+                    newDoc.order = index; 
                     if (newDoc.taxId) db.ref('company_contacts').push(newDoc);
                 });
-                alert('匯入完成'); 
-                e.target.value = '';
+                alert('匯入完成'); e.target.value = '';
             };
             reader.readAsArrayBuffer(file);
         },
