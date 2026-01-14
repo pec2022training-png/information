@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>公司聯絡人回饋管理系統 - 密碼防護版</title>
+    <title>公司聯絡人回饋管理系統 - 標記區分版</title>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
@@ -39,7 +39,6 @@
 
         .status-col { min-width: 180px; }
         .move-btns { display: flex; flex-direction: column; gap: 2px; }
-
         .admin-settings { background: #fffde7; border: 1px solid #fff59d; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: flex; align-items: center; gap: 15px; }
     </style>
 </head>
@@ -94,7 +93,6 @@
                     <button class="btn btn-success" @click="exportExcel">📊 匯出 Excel</button>
                     <button class="btn btn-danger" @click="clearAllData" style="opacity: 0.7;">🗑️ 清空全庫</button>
                 </template>
-                
                 <template v-if="isLoggedIn || isAdmin">
                     <button v-if="!isAdmin && !editingId && !isAdding && filteredData.length > 0" class="btn btn-warning" @click="confirmAllCorrect">✅ 確認其餘資料無誤送出</button>
                     <button v-if="!editingId && !isAdding" class="btn btn-primary" @click="startAddNew">➕ 新增聯絡人</button>
@@ -111,7 +109,7 @@
                     <th style="width: 120px;">姓名/職稱</th>
                     <th style="min-width: 200px;">聯繫方式</th>
                     <th class="status-col">狀態確認</th>
-                    <th style="width: 160px;">最後異動</th>
+                    <th style="width: 200px;">最後異動紀錄</th>
                     <th style="width: 140px;">操作/排序</th>
                 </tr>
             </thead>
@@ -220,12 +218,12 @@ createApp({
         
         // --- 核心 logic 修改區 ---
         
-        // 1. 單筆儲存邏輯 (使用者點擊「儲存」)
+        // 1. 單筆儲存邏輯 (手動調整)
         saveData() {
             if (!this.editForm.taxId || !this.editForm.compName || !this.editForm.name) return alert("必填欄位缺失");
             
-            // 標記為單純的「編修人資訊」
-            const editorTag = this.isAdmin ? '管理員' : `${this.editorInfo.name}(分機:${this.editorInfo.ext})`;
+            // 標記法：王小明(分機:123) [手動調整]
+            const editorTag = this.isAdmin ? '管理員' : `${this.editorInfo.name}(分機:${this.editorInfo.ext}) [手動調整]`;
             
             const payload = { ...this.editForm, updateTime: Date.now(), lastEditor: editorTag };
             const id = payload.id; delete payload.id;
@@ -235,23 +233,23 @@ createApp({
             this.cancelEdit();
         },
 
-        // 2. 批次確認邏輯 (點擊黃色按鈕)
+        // 2. 批次確認邏輯 (確認無需調整)
         async confirmAllCorrect() {
             if (this.filteredData.length === 0) return;
             
-            const manualTag = `${this.editorInfo.name}(分機:${this.editorInfo.ext})`; // 這是您剛才「手動修改」會產生的標記
-            const confirmTag = `${manualTag} [確認無需調整]`; // 這是「純確認」的標記
+            const manualTagPrefix = `${this.editorInfo.name}(分機:${this.editorInfo.ext}) [手動調整]`;
+            const confirmTag = `${this.editorInfo.name}(分機:${this.editorInfo.ext}) [確認無需調整]`;
             const now = Date.now();
             
-            if (!confirm(`確定目前顯示的所有聯絡人資料皆正確無誤嗎？\n(已手動修改過的資料將會保留，其餘資料將標註為「確認無需調整」)`)) return;
+            if (!confirm(`確定目前顯示的所有聯絡人資料皆正確無誤嗎？\n(已手動調整過的資料將保留紀錄，其餘資料將標註為「確認無需調整」)`)) return;
 
             try {
                 const updates = {};
                 let count = 0;
                 this.filteredData.forEach(item => {
-                    // 邏輯：只有當「最後異動人」不是目前的編修人標記時，才進行「純確認」標記
-                    // 這樣才不會覆蓋掉剛才手動「儲存」過的單筆紀錄
-                    if (item.lastEditor !== manualTag) {
+                    // 只有「最後異動人」不是目前這位編修人的「手動調整」標記時，才進行「確認無需調整」更新
+                    // 這樣就不會蓋掉剛剛才辛苦改完的單筆紀錄
+                    if (item.lastEditor !== manualTagPrefix) {
                         updates[`company_contacts/${item.id}/lastEditor`] = confirmTag;
                         updates[`company_contacts/${item.id}/updateTime`] = now;
                         count++;
@@ -260,17 +258,27 @@ createApp({
 
                 if (Object.keys(updates).length > 0) {
                     await db.ref().update(updates);
-                    alert(`完成！共確認了 ${count} 筆無需調整的資料。`);
+                    alert(`完成！共標註 ${count} 筆資料為 [確認無需調整]。`);
                 } else {
-                    alert("所有資料皆已由您手動更新過，無需再次確認。");
+                    alert("目前所有資料皆已由您手動調整過，無需再次確認。");
                 }
             } catch (err) { alert("更新失敗"); }
         },
 
-        // --- 其餘功能保持不變 ---
+        // --- 其餘輔助功能 ---
         toggleSelectAll(e) { this.selectedIds = e.target.checked ? this.filteredData.map(d => d.id) : []; },
         async batchDelete() { if (this.selectedIds.length === 0) return; if (confirm(`確定刪除 ${this.selectedIds.length} 筆？`)) { await Promise.all(this.selectedIds.map(id => db.ref(`company_contacts/${id}`).remove())); this.selectedIds = []; } },
-        async moveItem(index, direction) { const targetIndex = index + direction; if (targetIndex < 0 || targetIndex >= this.filteredData.length) return; const currentItem = this.filteredData[index]; const targetItem = this.filteredData[targetIndex]; if (currentItem.taxId !== targetItem.taxId) return; await db.ref(`company_contacts/${currentItem.id}`).update({ order: targetItem.order || 0 }); await db.ref(`company_contacts/${targetItem.id}`).update({ order: currentItem.order || 0 }); },
+        async moveItem(index, direction) { 
+            const targetIndex = index + direction; 
+            if (targetIndex < 0 || targetIndex >= this.filteredData.length) return; 
+            const currentItem = this.filteredData[index]; 
+            const targetItem = this.filteredData[targetIndex]; 
+            if (currentItem.taxId !== targetItem.taxId) return; 
+            const currentOrder = currentItem.order !== undefined ? currentItem.order : index;
+            const targetOrder = targetItem.order !== undefined ? targetItem.order : targetIndex;
+            await db.ref(`company_contacts/${currentItem.id}`).update({ order: targetOrder }); 
+            await db.ref(`company_contacts/${targetItem.id}`).update({ order: currentOrder }); 
+        },
         startAddNew() { this.isAdding = true; this.editingId = null; const tid = this.isAdmin ? '' : this.currentTaxId; const companyData = this.allData.filter(d => String(d.taxId) === String(tid)); const maxOrder = companyData.length > 0 ? Math.max(...companyData.map(d => d.order || 0)) : 0; this.editForm = { taxId: tid, compName: this.editorInfo.company, dept: '', name: '', title: '', phone: '', ext: '', fax: '', email: '', address: '', isTrainer: 'NO', sendDM: 'NO', order: maxOrder + 1 }; },
         startEdit(item) { this.editingId = item.id; this.isAdding = false; this.editForm = JSON.parse(JSON.stringify(item)); },
         cancelEdit() { this.editingId = null; this.isAdding = false; this.editForm = {}; },
@@ -278,7 +286,7 @@ createApp({
         clearAllData() { if (confirm('警告！清空全庫？')) db.ref('company_contacts').remove(); },
         triggerImport() { this.$refs.fileInput.click(); },
         handleImport(e) { const file = e.target.files[0]; const reader = new FileReader(); reader.onload = (ev) => { const workbook = XLSX.read(new Uint8Array(ev.target.result), { type: 'array' }); const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { defval: "" }); json.forEach((row, index) => { const newDoc = {}; Object.keys(this.fieldMap).forEach(zh => { let val = String(row[zh] || '').trim(); if (zh.includes('YES/NO')) val = val.toUpperCase().includes('Y') ? 'YES' : 'NO'; newDoc[this.fieldMap[zh]] = val; }); newDoc.updateTime = Date.now(); newDoc.lastEditor = "Excel匯入"; newDoc.order = index; if (newDoc.taxId) db.ref('company_contacts').push(newDoc); }); alert('匯入完成'); e.target.value = ''; }; reader.readAsArrayBuffer(file); },
-        exportExcel() { const rows = this.filteredData.map(item => ({ '統一編號': item.taxId, '公司名稱': item.compName, '單位': item.dept, '姓名': item.name, '職稱': item.title, '電話': item.phone, '分機': item.ext, 'FAX': item.fax, 'e-mail': item.email, '地址': item.address, '訓練主管或主辦(YES/NO)': item.isTrainer, '每季寄發DM(YES/NO)': item.sendDM, '最後異動人': item.lastEditor, '異動時間': this.formatDate(item.updateTime) })); const ws = XLSX.utils.json_to_sheet(rows); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Data"); XLSX.writeFile(wb, `聯絡人資料庫_${new Date().toLocaleDateString()}.xlsx`); },
+        exportExcel() { const rows = this.filteredData.map(item => ({ '統一編號': item.taxId, '公司名稱': item.compName, '單位': item.dept, '姓名': item.name, '職稱': item.title, '電話': item.phone, '分機': item.ext, 'FAX': item.fax, 'e-mail': item.email, '地址': item.address, '訓練主管或主辦(YES/NO)': item.isTrainer, '每季寄發DM(YES/NO)': item.sendDM, '最後異動紀錄': item.lastEditor, '異動時間': this.formatDate(item.updateTime) })); const ws = XLSX.utils.json_to_sheet(rows); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Data"); XLSX.writeFile(wb, `聯絡人資料庫_${new Date().toLocaleDateString()}.xlsx`); },
         formatDate(ms) { return ms ? new Date(ms).toLocaleString() : '-'; }
     }
 }).mount('#app');
