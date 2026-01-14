@@ -69,7 +69,7 @@
                     編修人員：<strong>{{ editorInfo.name }} (分機: {{ editorInfo.ext }})</strong>
                 </p>
                 <p v-else-if="isAdmin" style="color: #666; margin:0;">
-                    <small>💡 管理員模式：已修正 FAX 欄位顯示，維持原始 Excel 排序邏輯。</small>
+                    <small>💡 管理員模式：請以右上方功能操作，或勾選多筆進行批次操作。</small>
                 </p>
             </div>
             <div style="display:flex; gap:8px; flex-wrap: wrap; justify-content: flex-end;">
@@ -386,4 +386,5 @@ createApp({
 </script>
 </body>
 </html>
+
 
