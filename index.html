@@ -94,7 +94,7 @@
                     <button class="btn btn-danger" @click="clearAllData" style="opacity: 0.7;">🗑️ 清空全庫</button>
                 </template>
                 <template v-if="isLoggedIn || isAdmin">
-                    <button v-if="!isAdmin && !editingId && !isAdding && filteredData.length > 0" class="btn btn-warning" @click="confirmAllCorrect">✅ 確認其餘資料無誤送出</button>
+                    <button v-if="!isAdmin && !editingId && !isAdding && filteredData.length > 0" class="btn btn-warning" @click="confirmAllCorrect">✅ 除手動調整外，確認其餘資料無誤</button>
                     <button v-if="!editingId && !isAdding" class="btn btn-primary" @click="startAddNew">➕ 新增聯絡人</button>
                 </template>
             </div>
@@ -293,3 +293,4 @@ createApp({
 </script>
 </body>
 </html>
+
