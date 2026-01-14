@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>公司聯絡人回饋管理系統 - 自排順序版</title>
+    <title>公司聯絡人回饋管理系統 - 公司群組穩定版</title>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
@@ -64,13 +64,12 @@
         <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
             <div>
                 <h2>{{ isAdmin ? '💎 系統管理員後台' : '📝 貴公司聯絡資訊回饋' }}</h2>
-                <p v-if="!isLoggedIn && !isAdmin" style="color: #ea4335;">請先於中間視窗完成身分資訊填寫。</p>
                 <p v-if="isLoggedIn && !isAdmin" style="color: #666; margin:0;">
                     目前作業統編：<strong>{{ currentTaxId }}</strong> | 公司：<strong>{{ editorInfo.company }}</strong><br>
                     編修人員：<strong>{{ editorInfo.name }} (分機: {{ editorInfo.ext }})</strong>
                 </p>
                 <p v-else-if="isAdmin" style="color: #666; margin:0;">
-                    <small>💡 管理員模式：可進行匯入、匯出與批次刪除勾選項目。</small>
+                    <small>💡 管理員模式：系統會先依「統編」分群，再依「自訂順序」排列。</small>
                 </p>
             </div>
             <div style="display:flex; gap:8px; flex-wrap: wrap; justify-content: flex-end;">
@@ -119,12 +118,12 @@
                     </td>
                     <td>
                         <select v-model="editForm.isTrainer" class="inline-input">
-                            <option value="YES">訓練主管或主辦:YES</option>
-                            <option value="NO">訓練主管或主辦:NO</option>
+                            <option value="YES">訓練主管:YES</option>
+                            <option value="NO">訓練主管:NO</option>
                         </select>
                         <select v-model="editForm.sendDM" class="inline-input" style="margin-top:4px;">
-                            <option value="YES">每季寄發DM:YES</option>
-                            <option value="NO">每季寄發DM:NO</option>
+                            <option value="YES">寄發DM:YES</option>
+                            <option value="NO">寄發DM:NO</option>
                         </select>
                     </td>
                     <td>-</td>
@@ -167,17 +166,17 @@
                     <td>
                         <div v-if="editingId === item.id">
                             <select v-model="editForm.isTrainer" class="inline-input">
-                                <option value="YES">訓練主管或主辦:YES</option>
-                                <option value="NO">訓練主管或主辦:NO</option>
+                                <option value="YES">訓練主管:YES</option>
+                                <option value="NO">訓練主管:NO</option>
                             </select>
                             <select v-model="editForm.sendDM" class="inline-input" style="margin-top:4px;">
-                                <option value="YES">每季寄發DM:YES</option>
-                                <option value="NO">每季寄發DM:NO</option>
+                                <option value="YES">寄發DM:YES</option>
+                                <option value="NO">寄發DM:NO</option>
                             </select>
                         </div>
                         <div v-else>
-                            <span :class="['tag', item.isTrainer === 'YES' ? 'tag-yes' : 'tag-no']">訓練主管或主辦:{{ item.isTrainer }}</span><br>
-                            <span :class="['tag', item.sendDM === 'YES' ? 'tag-yes' : 'tag-no']" style="margin-top:5px;">每季寄發DM:{{ item.sendDM }}</span>
+                            <span :class="['tag', item.isTrainer === 'YES' ? 'tag-yes' : 'tag-no']">訓練主管:{{ item.isTrainer }}</span><br>
+                            <span :class="['tag', item.sendDM === 'YES' ? 'tag-yes' : 'tag-no']" style="margin-top:5px;">寄發DM:{{ item.sendDM }}</span>
                         </div>
                     </td>
                     <td style="font-size: 0.7rem; color: #666;">{{ item.lastEditor }}<br>{{ formatDate(item.updateTime) }}</td>
@@ -234,8 +233,28 @@ createApp({
     },
     computed: {
         filteredData() {
-            let data = this.isAdmin ? this.allData : this.allData.filter(d => String(d.taxId).trim() === String(this.currentTaxId).trim());
-            return data.sort((a, b) => (a.order || 0) - (b.order || 0) || (a.updateTime - b.updateTime));
+            let data = [];
+            if (this.isAdmin) {
+                data = [...this.allData];
+            } else {
+                data = this.allData.filter(d => String(d.taxId).trim() === String(this.currentTaxId).trim());
+            }
+
+            // 【重要修正】多重排序邏輯
+            // 1. 先按「統編」排序 (讓同一家公司排在一起)
+            // 2. 統編相同時，再按「order」排序 (維持公司內部的自訂順序)
+            // 3. 以上皆相同時，按「更新時間」排序
+            return data.sort((a, b) => {
+                const taxA = String(a.taxId || '');
+                const taxB = String(b.taxId || '');
+                if (taxA !== taxB) return taxA.localeCompare(taxB);
+                
+                const orderA = a.order !== undefined ? a.order : 999999;
+                const orderB = b.order !== undefined ? b.order : 999999;
+                if (orderA !== orderB) return orderA - orderB;
+                
+                return (a.updateTime || 0) - (b.updateTime || 0);
+            });
         },
         isAllSelected() {
             return this.filteredData.length > 0 && this.selectedIds.length === this.filteredData.length;
@@ -263,47 +282,69 @@ createApp({
             this.isLoggedIn = true; 
         },
         toggleSelectAll(e) {
-            if (e.target.checked) {
-                this.selectedIds = this.filteredData.map(d => d.id);
-            } else {
-                this.selectedIds = [];
-            }
+            this.selectedIds = e.target.checked ? this.filteredData.map(d => d.id) : [];
         },
         async batchDelete() {
             if (this.selectedIds.length === 0) return;
-            if (confirm(`確定要刪除這 ${this.selectedIds.length} 筆選中的資料嗎？此操作不可還原。`)) {
+            if (confirm(`確定要刪除這 ${this.selectedIds.length} 筆選中的資料嗎？`)) {
                 try {
                     const promises = this.selectedIds.map(id => db.ref(`company_contacts/${id}`).remove());
                     await Promise.all(promises);
                     this.selectedIds = [];
                     alert('批次刪除完成');
-                } catch (err) {
-                    alert('刪除過程中發生錯誤');
-                }
+                } catch (err) { alert('刪除失敗'); }
             }
         },
         async moveItem(index, direction) {
             const targetIndex = index + direction;
+            // 確保移動不會超出「當前可見列表」的範圍
             if (targetIndex < 0 || targetIndex >= this.filteredData.length) return;
+
             const currentItem = this.filteredData[index];
             const targetItem = this.filteredData[targetIndex];
+
+            // 如果移動會跨越不同統編，在邏輯上應該禁止（但因為 filteredData 已依統編分群，
+            // 且編修人只能看單一公司，所以這裡主要是保護管理員畫面的穩定）
+            if (currentItem.taxId !== targetItem.taxId) {
+                console.log("不能跨公司移動順序");
+                return;
+            }
+
+            // 取得或初始化 order 值
             let currentOrder = currentItem.order !== undefined ? currentItem.order : index;
             let targetOrder = targetItem.order !== undefined ? targetItem.order : targetIndex;
-            if (currentOrder === targetOrder) targetOrder = currentOrder + direction;
+
+            // 確保 order 值不相等，否則交換沒意義
+            if (currentOrder === targetOrder) {
+                targetOrder = currentOrder + direction;
+            }
+
+            // 在資料庫中交換這兩筆的 order
             await db.ref(`company_contacts/${currentItem.id}`).update({ order: targetOrder });
             await db.ref(`company_contacts/${targetItem.id}`).update({ order: currentOrder });
         },
         startAddNew() {
-            this.isAdding = true; this.editingId = null;
-            const maxOrder = this.filteredData.length > 0 ? Math.max(...this.filteredData.map(d => d.order || 0)) : 0;
-            this.editForm = { taxId: this.currentTaxId, compName: this.editorInfo.company, dept: '', name: '', title: '', phone: '', ext: '', fax: '', email: '', address: '', isTrainer: 'NO', sendDM: 'NO', order: maxOrder + 1 };
+            this.isAdding = true; 
+            this.editingId = null;
+            // 抓取當前公司內最大的 Order
+            const companyData = this.allData.filter(d => String(d.taxId) === String(this.currentTaxId));
+            const maxOrder = companyData.length > 0 ? Math.max(...companyData.map(d => d.order || 0)) : 0;
+            
+            this.editForm = { 
+                taxId: this.currentTaxId, 
+                compName: this.editorInfo.company, 
+                dept: '', name: '', title: '', phone: '', ext: '', fax: '', email: '', address: '', 
+                isTrainer: 'NO', sendDM: 'NO', order: maxOrder + 1 
+            };
         },
-        startEdit(item) { this.editingId = item.id; this.isAdding = false; this.editForm = JSON.parse(JSON.stringify(item)); },
+        startEdit(item) { 
+            this.editingId = item.id; 
+            this.isAdding = false; 
+            this.editForm = JSON.parse(JSON.stringify(item)); 
+        },
         cancelEdit() { this.editingId = null; this.isAdding = false; this.editForm = {}; },
         saveData() {
             if (!this.editForm.taxId || !this.editForm.compName || !this.editForm.name) return alert("必填欄位缺失");
-            
-            // 組合編修人姓名與分機，方便後續聯繫
             const editorTag = this.isAdmin ? '管理員' : (this.editorInfo.name + (this.editorInfo.ext ? `(分機:${this.editorInfo.ext})` : ''));
             
             const payload = { 
@@ -318,10 +359,7 @@ createApp({
             this.cancelEdit();
         },
         deleteItem(id) { 
-            if(confirm('確定刪除？')) {
-                db.ref(`company_contacts/${id}`).remove();
-                this.selectedIds = this.selectedIds.filter(sid => sid !== id);
-            }
+            if(confirm('確定刪除？')) db.ref(`company_contacts/${id}`).remove();
         },
         clearAllData() { if (confirm('警告！即將清空所有資料庫內容，確定？')) db.ref('company_contacts').remove(); },
         triggerImport() { this.$refs.fileInput.click(); },
@@ -331,6 +369,8 @@ createApp({
             reader.onload = (ev) => {
                 const workbook = XLSX.read(new Uint8Array(ev.target.result), { type: 'array' });
                 const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { defval: "" });
+                
+                // 匯入時依序給予 order，但因為有「統編」主排序鎖定，順序會很穩定
                 json.forEach((row, index) => {
                     const newDoc = {};
                     Object.keys(this.fieldMap).forEach(zh => { 
@@ -343,7 +383,8 @@ createApp({
                     newDoc.order = index; 
                     if (newDoc.taxId) db.ref('company_contacts').push(newDoc);
                 });
-                alert('匯入完成'); e.target.value = '';
+                alert('匯入完成'); 
+                e.target.value = '';
             };
             reader.readAsArrayBuffer(file);
         },
