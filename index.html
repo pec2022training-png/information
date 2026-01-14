@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>公司聯絡人回饋管理系統 - 完整欄位修正版</title>
+    <title>公司聯絡人回饋管理系統 - 密碼防護版</title>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
@@ -17,16 +17,16 @@
         .login-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: flex; justify-content: center; align-items: center; z-index: 1000; }
         .login-box { background: white; padding: 30px; border-radius: 12px; width: 400px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
         
-        .inline-input { width: 100%; padding: 6px; border: 1px solid #1a73e8; border-radius: 4px; box-sizing: border-box; font-size: 0.85rem; margin-bottom: 2px; }
+        .inline-input { width: 100%; padding: 8px; border: 1px solid #1a73e8; border-radius: 4px; box-sizing: border-box; font-size: 0.9rem; margin-bottom: 5px; }
         .inline-input:disabled { background-color: #f5f5f5; border: 1px solid #ddd; color: #888; }
         
-        .btn { padding: 6px 10px; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem; transition: 0.2s; font-weight: 500; }
+        .btn { padding: 6px 12px; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem; transition: 0.2s; font-weight: 500; }
         .btn-primary { background: #1a73e8; color: white; }
         .btn-success { background: #34a853; color: white; }
         .btn-danger { background: #ea4335; color: white; }
         .btn-secondary { background: #70757a; color: white; }
+        .btn-warning { background: #fbbc04; color: #333; }
         .btn-sort { background: #f8f9fa; color: #333; border: 1px solid #ddd; margin-right: 2px; }
-        .btn-sort:hover { background: #e8f0fe; }
 
         table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.85rem; }
         th, td { border: 1px solid #f1f3f4; padding: 10px; text-align: left; vertical-align: middle; }
@@ -39,6 +39,9 @@
 
         .status-col { min-width: 180px; }
         .move-btns { display: flex; flex-direction: column; gap: 2px; }
+
+        /* 管理員密碼設定區 */
+        .admin-settings { background: #fffde7; border: 1px solid #fff59d; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: flex; align-items: center; gap: 15px; }
     </style>
 </head>
 <body>
@@ -47,20 +50,38 @@
     <div v-if="!isLoggedIn && !isAdmin" class="login-overlay">
         <div class="login-box">
             <h3 style="margin-top:0; text-align: center;">🏢 聯絡人資訊維護系統</h3>
-            <div style="margin-bottom: 15px;">
-                <label>請輸入公司統一編號 (8碼)：</label>
-                <input type="text" v-model="loginTaxId" maxlength="8" @input="autoSearchCompany" class="inline-input" style="font-size: 1rem;">
+            
+            <div v-if="!isPasswordVerified">
+                <div style="margin-bottom: 15px;">
+                    <label>請輸入系統存取密碼：</label>
+                    <input type="password" v-model="inputAccessPassword" placeholder="此密碼由管理者提供" class="inline-input" style="font-size: 1rem; margin-top:10px;" @keyup.enter="verifyAccessPassword">
+                </div>
+                <button class="btn btn-primary" style="width: 100%; padding: 10px;" @click="verifyAccessPassword">驗證密碼</button>
             </div>
-            <div v-if="/^\d{8}$/.test(loginTaxId)">
-                <div style="margin-bottom: 10px;"><label>公司名稱：</label><input type="text" v-model="editorInfo.company" class="inline-input"></div>
-                <div style="margin-bottom: 10px;"><label>編修人姓名：</label><input type="text" v-model="editorInfo.name" placeholder="請輸入編修人姓名" class="inline-input"></div>
-                <div style="margin-bottom: 15px;"><label>編修人分機：</label><input type="text" v-model="editorInfo.ext" placeholder="請輸入分機，方便聯繫確認" class="inline-input"></div>
-                <button class="btn btn-primary" style="width: 100%;" @click="login">確認進入</button>
+
+            <div v-else>
+                <div style="margin-bottom: 15px;">
+                    <label>請輸入公司統一編號 (8碼)：</label>
+                    <input type="text" v-model="loginTaxId" maxlength="8" @input="autoSearchCompany" class="inline-input" style="font-size: 1rem; margin-top:10px;">
+                </div>
+                <div v-if="/^\d{8}$/.test(loginTaxId)">
+                    <div style="margin-bottom: 10px;"><label>公司名稱：</label><input type="text" v-model="editorInfo.company" class="inline-input"></div>
+                    <div style="margin-bottom: 10px;"><label>編修人姓名：</label><input type="text" v-model="editorInfo.name" placeholder="請輸入您的姓名" class="inline-input"></div>
+                    <div style="margin-bottom: 15px;"><label>編修人分機：</label><input type="text" v-model="editorInfo.ext" placeholder="請輸入分機，方便聯繫確認" class="inline-input"></div>
+                    <button class="btn btn-success" style="width: 100%; padding: 10px;" @click="login">確認進入編修</button>
+                </div>
             </div>
         </div>
     </div>
 
     <div class="container">
+        <div v-if="isAdmin" class="admin-settings">
+            <strong>🔑 設定編修人存取密碼：</strong>
+            <input type="text" v-model="newSystemPassword" placeholder="設定新密碼" class="inline-input" style="width: 200px; margin-bottom:0;">
+            <button class="btn btn-warning" @click="saveSystemPassword">更新密碼</button>
+            <span style="font-size: 0.8rem; color: #666;">(目前密碼：{{ systemPassword }})</span>
+        </div>
+
         <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
             <div>
                 <h2>{{ isAdmin ? '💎 系統管理員後台' : '📝 貴公司聯絡資訊回饋' }}</h2>
@@ -69,7 +90,7 @@
                     編修人員：<strong>{{ editorInfo.name }} (分機: {{ editorInfo.ext }})</strong>
                 </p>
                 <p v-else-if="isAdmin" style="color: #666; margin:0;">
-                    <small>💡 管理員模式：請以右上方功能操作，或勾選多筆進行批次操作。</small>
+                    <small>💡 管理員模式：可進行資料異動、批次刪除與 Excel 匯入匯出。</small>
                 </p>
             </div>
             <div style="display:flex; gap:8px; flex-wrap: wrap; justify-content: flex-end;">
@@ -211,6 +232,8 @@
 
 <script>
 const { createApp } = Vue;
+
+// Firebase 設定
 const firebaseConfig = {
     apiKey: "AIzaSyA97EbUfh620b-Bz2eFeSifptEOBkL_v7U",
     authDomain: "training-76bd2.firebaseapp.com",
@@ -221,16 +244,33 @@ const firebaseConfig = {
     appId: "1:1032641306025:web:a25f74c2bef92268dcf8b8",
     measurementId: "G-EQ84DXPD97"
 };
+
 if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
 createApp({
     data() {
         return {
-            isAdmin: false, isLoggedIn: false, loginTaxId: '', currentTaxId: '',
+            // 登入狀態
+            isAdmin: false,
+            isLoggedIn: false,
+            isPasswordVerified: false, 
+            systemPassword: '', // 從資料庫讀取的正確密碼
+            inputAccessPassword: '', // 使用者輸入的密碼
+            newSystemPassword: '', // 管理員設定新密碼用
+            
+            loginTaxId: '',
+            currentTaxId: '',
             editorInfo: { company: '', name: '', ext: '' },
-            allData: [], editingId: null, isAdding: false, editForm: {},
+            
+            // 資料儲存
+            allData: [],
+            editingId: null,
+            isAdding: false,
+            editForm: {},
             selectedIds: [],
+            
+            // Excel 映射
             fieldMap: {
                 '統一編號': 'taxId', '公司名稱': 'compName', '單位': 'dept', '姓名': 'name', '職稱': 'title',
                 '電話': 'phone', '分機': 'ext', 'FAX': 'fax', 'e-mail': 'email', '地址': 'address',
@@ -242,7 +282,6 @@ createApp({
         filteredData() {
             let baseData = this.isAdmin ? this.allData : this.allData.filter(d => String(d.taxId).trim() === String(this.currentTaxId).trim());
             
-            // 維持原始 Excel 順序邏輯：計算每家公司在全資料庫中的最小 Order 值
             const companyRanks = {};
             this.allData.forEach(item => {
                 const tid = String(item.taxId);
@@ -269,12 +308,37 @@ createApp({
     mounted() {
         const urlParams = new URLSearchParams(window.location.search);
         this.isAdmin = urlParams.get('role') === 'admin';
+        
+        // 監聽聯絡人資料
         db.ref('company_contacts').on('value', s => {
             const val = s.val();
             this.allData = val ? Object.keys(val).map(k => ({ id: k, ...val[k] })) : [];
         });
+
+        // 監聽系統存取密碼
+        db.ref('settings/accessPassword').on('value', s => {
+            this.systemPassword = s.val() || '1234'; // 若沒設定則預設為 1234
+        });
     },
     methods: {
+        // 驗證進入密碼
+        verifyAccessPassword() {
+            if (this.inputAccessPassword === this.systemPassword) {
+                this.isPasswordVerified = true;
+            } else {
+                alert("存取密碼錯誤，請聯繫管理員。");
+                this.inputAccessPassword = '';
+            }
+        },
+        // 管理員更新密碼
+        saveSystemPassword() {
+            if (!this.newSystemPassword.trim()) return alert("請輸入密碼內容");
+            db.ref('settings/accessPassword').set(this.newSystemPassword.trim())
+                .then(() => {
+                    alert("存取密碼已更新！");
+                    this.newSystemPassword = '';
+                });
+        },
         autoSearchCompany() {
             if (this.loginTaxId.length === 8) {
                 const found = this.allData.find(d => String(d.taxId).trim() === this.loginTaxId.trim());
@@ -386,5 +450,3 @@ createApp({
 </script>
 </body>
 </html>
-
-
