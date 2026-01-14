@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>公司聯絡人回饋管理系統 - 標記區分版</title>
+    <title>公司聯絡人回饋管理系統 - 完整標記版</title>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
@@ -94,7 +94,7 @@
                     <button class="btn btn-danger" @click="clearAllData" style="opacity: 0.7;">🗑️ 清空全庫</button>
                 </template>
                 <template v-if="isLoggedIn || isAdmin">
-                    <button v-if="!isAdmin && !editingId && !isAdding && filteredData.length > 0" class="btn btn-warning" @click="confirmAllCorrect">✅ 除手動調整外，確認其餘資料無誤</button>
+                    <button v-if="!isAdmin && !editingId && !isAdding && filteredData.length > 0" class="btn btn-warning" @click="confirmAllCorrect">✅ 除手動新增/調整外，其餘資料確認無誤</button>
                     <button v-if="!editingId && !isAdding" class="btn btn-primary" @click="startAddNew">➕ 新增聯絡人</button>
                 </template>
             </div>
@@ -109,7 +109,7 @@
                     <th style="width: 120px;">姓名/職稱</th>
                     <th style="min-width: 200px;">聯繫方式</th>
                     <th class="status-col">狀態確認</th>
-                    <th style="width: 200px;">最後異動紀錄</th>
+                    <th style="width: 220px;">最後異動紀錄</th>
                     <th style="width: 140px;">操作/排序</th>
                 </tr>
             </thead>
@@ -218,38 +218,50 @@ createApp({
         
         // --- 核心 logic 修改區 ---
         
-        // 1. 單筆儲存邏輯 (手動調整)
+        // 1. 儲存邏輯 (區分新增與調整)
         saveData() {
             if (!this.editForm.taxId || !this.editForm.compName || !this.editForm.name) return alert("必填欄位缺失");
             
-            // 標記法：王小明(分機:123) [手動調整]
-            const editorTag = this.isAdmin ? '管理員' : `${this.editorInfo.name}(分機:${this.editorInfo.ext}) [手動調整]`;
+            const id = this.editForm.id;
+            const baseInfo = `${this.editorInfo.name}(分機:${this.editorInfo.ext})`;
+            
+            // 根據有無 id 來判斷是手動調整還是手動新增
+            let editorTag = '';
+            if (this.isAdmin) {
+                editorTag = '管理員';
+            } else {
+                editorTag = id ? `${baseInfo} [手動調整]` : `${baseInfo} [手動新增]`;
+            }
             
             const payload = { ...this.editForm, updateTime: Date.now(), lastEditor: editorTag };
-            const id = payload.id; delete payload.id;
+            delete payload.id;
             
-            if (id) db.ref(`company_contacts/${id}`).update(payload);
-            else db.ref('company_contacts').push(payload);
+            if (id) {
+                db.ref(`company_contacts/${id}`).update(payload);
+            } else {
+                db.ref('company_contacts').push(payload);
+            }
             this.cancelEdit();
         },
 
-        // 2. 批次確認邏輯 (確認無需調整)
+        // 2. 批次確認邏輯 (除新增/調整外其餘更新)
         async confirmAllCorrect() {
             if (this.filteredData.length === 0) return;
             
-            const manualTagPrefix = `${this.editorInfo.name}(分機:${this.editorInfo.ext}) [手動調整]`;
-            const confirmTag = `${this.editorInfo.name}(分機:${this.editorInfo.ext}) [確認無需調整]`;
+            const baseInfo = `${this.editorInfo.name}(分機:${this.editorInfo.ext})`;
+            const manualAdjTag = `${baseInfo} [手動調整]`;
+            const manualAddTag = `${baseInfo} [手動新增]`;
+            const confirmTag = `${baseInfo} [確認無需調整]`;
             const now = Date.now();
             
-            if (!confirm(`確定目前顯示的所有聯絡人資料皆正確無誤嗎？\n(已手動調整過的資料將保留紀錄，其餘資料將標註為「確認無需調整」)`)) return;
+            if (!confirm(`確定「手動新增/調整」以外的資料皆正確無誤嗎？\n系統將為其餘資料標註為「確認無需調整」。`)) return;
 
             try {
                 const updates = {};
                 let count = 0;
                 this.filteredData.forEach(item => {
-                    // 只有「最後異動人」不是目前這位編修人的「手動調整」標記時，才進行「確認無需調整」更新
-                    // 這樣就不會蓋掉剛剛才辛苦改完的單筆紀錄
-                    if (item.lastEditor !== manualTagPrefix) {
+                    // 只有在最後異動紀錄不屬於這次操作的 [手動調整] 且不屬於 [手動新增] 時，才進行批次確認標記
+                    if (item.lastEditor !== manualAdjTag && item.lastEditor !== manualAddTag) {
                         updates[`company_contacts/${item.id}/lastEditor`] = confirmTag;
                         updates[`company_contacts/${item.id}/updateTime`] = now;
                         count++;
@@ -258,14 +270,14 @@ createApp({
 
                 if (Object.keys(updates).length > 0) {
                     await db.ref().update(updates);
-                    alert(`完成！共標註 ${count} 筆資料為 [確認無需調整]。`);
+                    alert(`作業完成！共標記 ${count} 筆資料為 [確認無需調整]。`);
                 } else {
-                    alert("目前所有資料皆已由您手動調整過，無需再次確認。");
+                    alert("目前所有資料皆已由您手動新增或調整過。");
                 }
             } catch (err) { alert("更新失敗"); }
         },
 
-        // --- 其餘輔助功能 ---
+        // --- 其餘輔助功能保持不變 ---
         toggleSelectAll(e) { this.selectedIds = e.target.checked ? this.filteredData.map(d => d.id) : []; },
         async batchDelete() { if (this.selectedIds.length === 0) return; if (confirm(`確定刪除 ${this.selectedIds.length} 筆？`)) { await Promise.all(this.selectedIds.map(id => db.ref(`company_contacts/${id}`).remove())); this.selectedIds = []; } },
         async moveItem(index, direction) { 
@@ -279,7 +291,14 @@ createApp({
             await db.ref(`company_contacts/${currentItem.id}`).update({ order: targetOrder }); 
             await db.ref(`company_contacts/${targetItem.id}`).update({ order: currentOrder }); 
         },
-        startAddNew() { this.isAdding = true; this.editingId = null; const tid = this.isAdmin ? '' : this.currentTaxId; const companyData = this.allData.filter(d => String(d.taxId) === String(tid)); const maxOrder = companyData.length > 0 ? Math.max(...companyData.map(d => d.order || 0)) : 0; this.editForm = { taxId: tid, compName: this.editorInfo.company, dept: '', name: '', title: '', phone: '', ext: '', fax: '', email: '', address: '', isTrainer: 'NO', sendDM: 'NO', order: maxOrder + 1 }; },
+        startAddNew() { 
+            this.isAdding = true; 
+            this.editingId = null; 
+            const tid = this.isAdmin ? '' : this.currentTaxId; 
+            const companyData = this.allData.filter(d => String(d.taxId) === String(tid)); 
+            const maxOrder = companyData.length > 0 ? Math.max(...companyData.map(d => d.order || 0)) : 0; 
+            this.editForm = { taxId: tid, compName: this.editorInfo.company, dept: '', name: '', title: '', phone: '', ext: '', fax: '', email: '', address: '', isTrainer: 'NO', sendDM: 'NO', order: maxOrder + 1 }; 
+        },
         startEdit(item) { this.editingId = item.id; this.isAdding = false; this.editForm = JSON.parse(JSON.stringify(item)); },
         cancelEdit() { this.editingId = null; this.isAdding = false; this.editForm = {}; },
         deleteItem(id) { if(confirm('確定刪除？')) db.ref(`company_contacts/${id}`).remove(); },
@@ -293,4 +312,3 @@ createApp({
 </script>
 </body>
 </html>
-
